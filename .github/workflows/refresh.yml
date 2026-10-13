@@ -1,0 +1,79 @@
+name: Refresh ROVER lookup
+
+# The registers change over days, not hours. 16:00 UTC is ~02:00-03:00 in
+# eastern Australia, so the crawl lands when the service is quiet.
+on:
+  schedule:
+    - cron: "0 16 * * *"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# never let two crawls overlap, and never cancel one half way through
+concurrency:
+  group: rover-refresh
+  cancel-in-progress: false
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 120
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+          cache: pip
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: "20"
+
+      - run: pip install -r requirements.txt
+
+      # parsing and pairing are tested before anything is crawled, so a broken
+      # build fails in seconds instead of after 35 minutes of requests
+      - name: Test the parser and the pairing
+        run: |
+          python tests/test_offline.py
+          python tests/test_pairing.py
+
+      - name: Crawl the SEVs Register
+        run: scrapy crawl rover -a list=sev -a details=1
+
+      - name: Crawl the Model Reports register
+        run: scrapy crawl rover -a list=mre -a details=1
+
+      - name: Pair the registers
+        run: python -m rover.pair
+
+      # a half-finished crawl still writes a feed; publishing it would quietly
+      # drop hundreds of approvals, so stop here instead
+      - name: Refuse to publish a short crawl
+        run: python scripts/check_fresh.py
+
+      - name: Build the page
+        run: |
+          mkdir -p site
+          python -m rover.page --html site/index.html
+
+      - name: Test the page that will ship
+        run: node tests/test_page.js site/index.html
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+  deploy:
+    needs: build
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - id: deployment
+        uses: actions/deploy-pages@v4

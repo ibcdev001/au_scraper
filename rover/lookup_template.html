@@ -1,0 +1,668 @@
+<meta charset="utf-8">
+<title>ROVER Approval Lookup</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Public+Sans:ital,wght@0,400;0,500;0,600;0,700;1,400&family=IBM+Plex+Mono:wght@400;500&display=swap">
+<style>
+  /* Layout: one column of plain white record cards, label above value, ruled
+     rather than coloured. Built for reading a register entry line by line. */
+  :root {
+    --bg: #ffffff;
+    --surface: #ffffff;
+    --surface-2: #f6f7f8;
+    --fg: #1b1b1d;
+    --fg-muted: #5f6a73;
+    --line: #e2e5e8;
+    --line-strong: #c7ccd1;
+    --link: #1e5f8f;
+    /* the three blocks that must stay traceable, marked by a rule only */
+    --mark-build: #b3261e;      /* Build date (report) only */
+    --mark-sevbuild: #45505a;
+    --mark-notes: #6a5aa6;
+    --mark-restrict: #9a6b16;
+    color-scheme: light;
+
+    --ui: "Public Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+    --mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, Menlo, monospace;
+
+    --fs-xs: 0.75rem;
+    --fs-sm: 0.8125rem;
+    --fs-base: 0.9375rem;
+    --fs-lg: 1.0625rem;
+    --fs-xl: 1.3125rem;
+    --fs-2xl: 1.75rem;
+  }
+
+  * { box-sizing: border-box; }
+  body {
+    margin: 0;
+    background: var(--bg);
+    color: var(--fg);
+    font-family: var(--ui);
+    font-size: var(--fs-base);
+    line-height: 1.55;
+    -webkit-text-size-adjust: 100%;
+  }
+  .wrap { width: 100%; max-width: 64rem; margin: 0 auto; padding-inline: 16px; }
+
+  .masthead { border-bottom: 1px solid var(--line); }
+  .masthead .wrap { padding-block: 1.5rem 1.25rem; }
+  .eyebrow {
+    margin: 0 0 0.375rem;
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.08em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+  }
+  h1 {
+    margin: 0;
+    font-size: var(--fs-2xl);
+    font-weight: 700;
+    letter-spacing: -0.01em;
+    text-wrap: balance;
+  }
+  .lede { margin: 0.375rem 0 0; max-width: 64ch; color: var(--fg-muted); }
+  .lede strong { color: var(--fg); font-weight: 600; }
+
+  .searchbar {
+    position: sticky;
+    top: env(safe-area-inset-top, 0px);
+    z-index: 5;
+    background: var(--bg);
+    border-bottom: 1px solid var(--line);
+  }
+  .searchbar .wrap { padding-block: 0.75rem; }
+  .fields { display: flex; flex-wrap: wrap; gap: 0.5rem 0.75rem; align-items: flex-end; }
+  .field { display: flex; flex-direction: column; gap: 0.1875rem; min-width: 0; }
+  .field.grow { flex: 1 1 22rem; }
+  label {
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+  }
+  input {
+    font-family: var(--ui);
+    font-size: var(--fs-base);
+    color: var(--fg);
+    background: #fff;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    padding: 0.4375rem 0.5625rem;
+    min-width: 0;
+    width: 100%;
+  }
+  #q { font-family: var(--mono); }
+  input:focus-visible {
+    outline: 2px solid var(--link);
+    outline-offset: 1px;
+    border-color: var(--link);
+  }
+  button {
+    font-family: var(--ui);
+    font-size: var(--fs-sm);
+    font-weight: 600;
+    color: var(--fg);
+    background: #fff;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    padding: 0.4375rem 0.8125rem;
+    cursor: pointer;
+  }
+  button:hover { border-color: var(--fg-muted); }
+  button:focus-visible { outline: 2px solid var(--link); outline-offset: 1px; }
+  .status { margin: 0.4375rem 0 0; font-size: var(--fs-sm); color: var(--fg-muted); }
+  .status strong { color: var(--fg); font-variant-numeric: tabular-nums; }
+
+  main .wrap { padding-block: 1rem 3rem; }
+  .entries { display: flex; flex-direction: column; gap: 1rem; }
+  .entry { border: 1px solid var(--line); border-radius: 2px; background: var(--surface); }
+  .entry.orphan { border-left: 3px solid var(--line-strong); }
+
+  .entry-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.375rem 1rem;
+    align-items: baseline;
+    justify-content: space-between;
+    padding: 0.75rem 1rem;
+    border-bottom: 1px solid var(--line);
+  }
+  .entry-id {
+    margin: 0;
+    font-family: var(--mono);
+    font-size: var(--fs-lg);
+    font-weight: 500;
+  }
+  .vehicle { margin: 0.0625rem 0 0; font-size: var(--fs-lg); font-weight: 600; }
+  .vehicle .variant { font-weight: 400; color: var(--fg-muted); }
+  .badges { display: flex; flex-wrap: wrap; gap: 0.3125rem; }
+  .pill {
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    padding: 0.125rem 0.4375rem;
+    border: 1px solid var(--line-strong);
+    border-radius: 2px;
+    color: var(--fg-muted);
+    white-space: nowrap;
+  }
+
+  /* label above value, aligned in columns so the eye can run down them */
+  .facts {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(11rem, 1fr));
+    gap: 0.625rem 1.5rem;
+    margin: 0;
+    padding: 0.75rem 1rem;
+  }
+  .fact { min-width: 0; }
+  .fact dt {
+    font-size: var(--fs-xs);
+    font-weight: 600;
+    letter-spacing: 0.03em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+  }
+  .fact dd {
+    margin: 0.0625rem 0 0;
+    font-variant-numeric: tabular-nums;
+    overflow-wrap: break-word;
+  }
+  .fact dd.code { font-family: var(--mono); font-size: var(--fs-sm); }
+
+  /* the blocks that must stand out: a rule and a label, no fill */
+  .note, .keyblock, .compliance {
+    margin: 0 1rem 0.75rem;
+    padding: 0.5rem 0 0.5rem 0.75rem;
+    border-left: 3px solid var(--line-strong);
+    background: none;
+    border-radius: 0;
+  }
+  .report .note, .report .keyblock, .report .compliance { margin: 0.5rem 0 0; }
+  .note p, .keyblock p, .compliance p { margin: 0; }
+  .note-label {
+    margin: 0 0 0.125rem;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.04em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+  }
+  .keyblock .value {
+    font-size: var(--fs-lg);
+    font-weight: 600;
+    font-variant-numeric: tabular-nums;
+  }
+  .keyblock.build { border-left-color: var(--mark-build); }
+  .keyblock.build .note-label { color: var(--mark-build); }
+  .keyblock.sevbuild { border-left-color: var(--mark-sevbuild); }
+  .keyblock.sevbuild .note-label { color: var(--mark-sevbuild); }
+  .keyblock.notes { border-left-color: var(--mark-notes); }
+  .keyblock.notes .note-label { color: var(--mark-notes); }
+  .note { border-left-color: var(--mark-restrict); }
+  .note .note-label { color: var(--mark-restrict); }
+  .note .parsed { margin-top: 0.25rem; font-size: var(--fs-sm); color: var(--fg-muted); }
+  .compliance { border-left-color: var(--line-strong); }
+
+  .reports { border-top: 1px solid var(--line); }
+  .reports-head {
+    margin: 0;
+    padding: 0.625rem 1rem 0;
+    font-size: var(--fs-xs);
+    font-weight: 700;
+    letter-spacing: 0.05em;
+    text-transform: uppercase;
+    color: var(--fg-muted);
+  }
+  .report { padding: 0.625rem 1rem 0.875rem; }
+  .report + .report { border-top: 1px solid var(--line); }
+  .report-head {
+    display: flex;
+    flex-wrap: wrap;
+    gap: 0.25rem 0.625rem;
+    align-items: baseline;
+  }
+  .report-id { font-family: var(--mono); font-weight: 500; }
+  .report-vehicle { font-weight: 600; }
+
+  
+
+
+  .sources { margin: 0.5rem 0 0; display: flex; flex-wrap: wrap; gap: 0.75rem; }
+  a { color: var(--link); }
+  .sources a { font-size: var(--fs-sm); }
+
+  .none {
+    padding: 0.75rem 1rem;
+    color: var(--fg-muted);
+    font-size: var(--fs-sm);
+    border-top: 1px solid var(--line);
+  }
+  .empty { padding: 2rem 1rem; text-align: center; color: var(--fg-muted); }
+  .empty code { font-family: var(--mono); color: var(--fg); }
+
+  footer { border-top: 1px solid var(--line); }
+  footer .wrap { padding-block: 1.25rem 2rem; }
+  .caveat { margin: 0 0 0.625rem; max-width: 72ch; font-size: var(--fs-sm); color: var(--fg-muted); }
+  .provenance { margin: 0; font-size: var(--fs-xs); color: var(--fg-muted); font-variant-numeric: tabular-nums; }
+
+  @media (max-width: 30rem) {
+    .entry-head { flex-direction: column; align-items: flex-start; }
+    h1 { font-size: var(--fs-xl); }
+  }
+</style>
+
+<header class="masthead">
+  <div class="wrap">
+    <p class="eyebrow">ROVER published approvals · SEVs Register × Model Reports</p>
+    <h1>ROVER Approval Lookup</h1>
+    <p class="lede">
+      Search by chassis or model code, full VIN, make, model or approval number. Each result shows the published criteria from both registers side by
+      side. <strong>It does not decide eligibility</strong> — the build-date ranges
+      are reproduced as published, never intersected or judged.
+    </p>
+  </div>
+</header>
+
+<div class="searchbar">
+  <div class="wrap">
+    <div class="fields">
+      <div class="field grow">
+        <label for="q">Chassis code, VIN, make, model or approval</label>
+        <input id="q" type="search" autocomplete="off" spellcheck="false"
+               placeholder="AHR20 · ZVW40 · Toyota Estima · SEV-000675 · MRE-000002">
+      </div>
+      <div class="field">
+        <label for="build-from">Build date from</label>
+        <input id="build-from" type="month">
+      </div>
+      <div class="field">
+        <label for="build-to">Build date to</label>
+        <input id="build-to" type="month">
+      </div>
+      <div class="field">
+        <button id="clear" type="button">Clear</button>
+      </div>
+    </div>
+    <p class="status" id="status" aria-live="polite"></p>
+  </div>
+</div>
+
+<main>
+  <div class="wrap">
+    <div class="entries" id="results"></div>
+    <div class="empty" id="empty" hidden></div>
+  </div>
+</main>
+
+<footer>
+  <div class="wrap">
+    <p class="caveat" id="caveat"></p>
+    <p class="provenance" id="provenance"></p>
+  </div>
+</footer>
+
+<script id="data" type="application/json">/*__DATA__*/null</script>
+<script>
+(function () {
+  "use strict";
+  var DOC = JSON.parse(document.getElementById("data").textContent) || {};
+  var ENTRIES = DOC.entries || [];
+  var META = DOC.meta || {};
+  var LIMIT = 40;
+
+  var qEl = document.getElementById("q");
+  var fromEl = document.getElementById("build-from");
+  var toEl = document.getElementById("build-to");
+  var clearEl = document.getElementById("clear");
+  var statusEl = document.getElementById("status");
+  var resultsEl = document.getElementById("results");
+  var emptyEl = document.getElementById("empty");
+
+  function esc(value) {
+    return String(value == null ? "" : value).replace(/[&<>"']/g, function (ch) {
+      return { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[ch];
+    });
+  }
+  function norm(value) {
+    return String(value == null ? "" : value).toUpperCase()
+      .replace(/[^A-Z0-9\-]+/g, " ").replace(/\s+/g, " ").trim();
+  }
+  // "06/2007" -> 200706, so a month compares as a plain number
+  function monthKey(text) {
+    var hit = /^(\d{1,2})\/(\d{4})$/.exec(String(text || "").trim());
+    return hit ? Number(hit[2]) * 100 + Number(hit[1]) : null;
+  }
+  // Does a published build-date range overlap the range the inspector typed?
+  // Either side may be open at either end, and a null bound means "no limit".
+  function overlapsRange(from, to, want) {
+    var start = monthKey(from), end = monthKey(to);
+    if (start === null) return true;           // no published range: never hide it
+    if (want.to !== null && start > want.to) return false;
+    if (end !== null && want.from !== null && end < want.from) return false;
+    return true;
+  }
+
+  function entryReports(entry) {
+    return entry.reports || (entry.report ? [entry.report] : []);
+  }
+  function entryId(entry) {
+    return (entry.sev && entry.sev.approval) ||
+           (entry.report && entry.report.approval) || "";
+  }
+
+  var patternCache = Object.create(null);
+  function matchesVin(entry, vin) {
+    var list = entry.patterns || [];
+    for (var i = 0; i < list.length; i++) {
+      var re = patternCache[list[i]];
+      if (re === undefined) {
+        try { re = new RegExp(list[i]); } catch (err) { re = null; }
+        patternCache[list[i]] = re;
+      }
+      if (re && re.test(vin)) return true;
+    }
+    return false;
+  }
+
+  // A chassis code is often embedded inside a longer string ("AHR20" inside
+  // "6XXXXAHR20XXXXXXX"), so substring matching has to stay - but a match on
+  // a whole word is the stronger one and sorts first ("LFA" the model before
+  // "WeLFAre" the body type).
+  function score(hay, tokens) {
+    var total = 0;
+    for (var i = 0; i < tokens.length; i++) {
+      var at = hay.indexOf(tokens[i]);
+      if (at === -1) return -1;
+      var before = at === 0 ? " " : hay.charAt(at - 1);
+      var after = hay.charAt(at + tokens[i].length) || " ";
+      var whole = before === " " && after === " ";
+      total += whole ? 3 : (before === " " ? 2 : 1);
+    }
+    return total;
+  }
+
+  function filter(query, want) {
+    var tokens = norm(query).split(" ").filter(Boolean);
+    var vin = String(query || "").toUpperCase().replace(/[^A-Z0-9]/g, "");
+    var vinMode = vin.length >= 11;
+    var ranked = [];
+    var matches = ENTRIES.filter(function (entry) {
+      if (tokens.length) {
+        var points = score(entry.haystack || "", tokens);
+        if (points < 0) {
+          if (!(vinMode && matchesVin(entry, vin))) return false;
+          points = 3 * tokens.length;      // a full-VIN hit is an exact one
+        }
+        ranked.push([entry, points]);
+      }
+      if (want) {
+        var ranges = [];
+        if (entry.sev) ranges.push([entry.sev.build_from, entry.sev.build_to]);
+        entryReports(entry).forEach(function (r) {
+          ranges.push([r.build_from, r.build_to]);
+        });
+        var ok = !ranges.length || ranges.some(function (r) {
+          return overlapsRange(r[0], r[1], want);
+        });
+        if (!ok) return false;
+      }
+      return true;
+    });
+    if (!tokens.length) return matches;
+    var points = new Map(ranked);
+    return matches.sort(function (a, b) {
+      var diff = (points.get(b) || 0) - (points.get(a) || 0);
+      if (diff) return diff;
+      return entryId(a).localeCompare(entryId(b));
+    });
+  }
+
+  function trimRepeat(variant, name) {
+    if (!variant) return null;
+    var v = norm(variant), n = norm(name);
+    if (!n) return variant;
+    if (n.indexOf(v) !== -1) return null;          // variant adds nothing
+    if (v.indexOf(n) === 0) {                      // variant starts with it
+      var rest = variant.slice(name.length).replace(/^[\s,:-]+/, "");
+      return rest || null;
+    }
+    return variant;
+  }
+
+  function fact(label, value, mono) {
+    if (value == null || value === "") return "";
+    return '<div class="fact"><dt>' + esc(label) + "</dt><dd" +
+      (mono ? ' class="code"' : "") + ">" + esc(value) + "</dd></div>";
+  }
+
+  function renderReport(report) {
+    var html = '<div class="report"><div class="report-head">' +
+      '<span class="report-id">' + esc(report.approval) + "</span>" +
+      '<span class="report-vehicle">' +
+      esc([report.make, report.model].filter(Boolean).join(" ")) + "</span>";
+    if (report.status) {
+      html += '<span class="pill' + (report.status === "In Force" ? "" : " warn") +
+        '">' + esc(report.status) + "</span>";
+    }
+    html += "</div>";
+
+    // build date first and in its own colour: it is the criterion an
+    // inspector works to
+    if (report.build_range_text) {
+      html += '<div class="keyblock build"><p class="note-label">' +
+        'Build date (report)</p><p class="value">' +
+        esc(report.build_range_text) + "</p></div>";
+    }
+
+    // the level of compliance is the register's own wording and runs to a
+    // full sentence, so it gets its own row rather than a pill
+    if (report.compliance_level) {
+      html += '<div class="compliance"><p class="note-label">Level of compliance' +
+        "</p><p>" + esc(report.compliance_level) + "</p></div>";
+    }
+    if (report.compliance_notes) {
+      html += '<div class="keyblock notes"><p class="note-label">' +
+        'Compliance level notes</p><p>' + esc(report.compliance_notes) +
+        "</p></div>";
+    }
+
+    html += "<dl class=\"facts\" style=\"padding:0.5rem 0 0\">";
+    html += fact("Model report notes", report.report_notes);
+    html += fact("Body shape", report.body_shape);
+    html += fact("Source market", report.source_market);
+    html += fact("Typical VIN", report.typical_vin, true);
+    html += fact("Based on", report.based_on);
+    html += fact("NSW body code", report.nsw_body_code);
+    html += "</dl>";
+
+    html += '<p class="sources">';
+    if (report.url) {
+      html += '<a href="' + esc(report.url) + '" target="_blank" rel="noopener">' +
+        "Model report on ROVER ↗</a>";
+    }
+    html += "</p></div>";
+    return html;
+  }
+
+  // a Model Report with no SEV approval to sit under, shown on its own
+  function renderReportEntry(entry) {
+    var report = entry.report || {};
+    var cited = (entry.cited_sev || []).filter(Boolean);
+    var html = '<article class="entry orphan"><div class="entry-head"><div>' +
+      '<p class="entry-id">' + esc(report.approval) + "</p>" +
+      '<p class="vehicle">' +
+      esc([report.make, report.model].filter(Boolean).join(" ")) + "</p></div>" +
+      '<div class="badges"><span class="pill warn">' +
+      (cited.length ? "SEV approval not in register" : "No SEV approval linked") +
+      "</span></div></div>";
+    html += '<div class="note"><p class="note-label">Why this is listed on its own</p>' +
+      "<p>" + esc(entry.note) +
+      (cited.length
+        ? " The report names " + esc(cited.join(", ")) +
+          ", which is not in the published SEVs Register — check ROVER for its " +
+          "current status before relying on this report."
+        : "") +
+      "</p></div>";
+    html += '<div class="reports"><p class="reports-head">Model report</p>' +
+      renderReport(report) + "</div>";
+    return html + "</article>";
+  }
+
+  function renderEntry(entry) {
+    if (entry.kind === "report") return renderReportEntry(entry);
+    var sev = entry.sev || {};
+    var name = [sev.make, sev.model].filter(Boolean).join(" ");
+    // The register repeats the vehicle inside the variant, in both directions:
+    // model "Freed Welfare" with variant "Welfare", and model "Estima" with
+    // variant "Toyota Estima WELCAB ONLY". Show only what the variant adds.
+    var variant = trimRepeat(sev.variant, name);
+    var html = '<article class="entry"><div class="entry-head"><div>' +
+      '<p class="entry-id">' + esc(sev.approval) + "</p>" +
+      '<p class="vehicle">' + esc(name) +
+      (variant ? ' <span class="variant">' + esc(variant) + "</span>" : "") +
+      "</p></div><div class=\"badges\">";
+    if (sev.criterion) html += '<span class="pill">' + esc(sev.criterion) + "</span>";
+    if (sev.category_label) {
+      html += '<span class="pill quiet">' + esc(sev.category_label) + "</span>";
+    }
+    if (sev.under_review) html += '<span class="pill warn">Under review</span>';
+    if (entry.no_report) {
+      html += '<span class="pill warn">No model report</span>';
+    }
+    html += "</div></div>";
+
+    if (sev.build_range_text) {
+      html += '<div class="keyblock sevbuild"><p class="note-label">' +
+        'Build date range (SEV)</p><p class="value">' +
+        esc(sev.build_range_text) + "</p></div>";
+    }
+    html += '<dl class="facts">';
+    html += fact("Model code", sev.model_code, true);
+    html += fact("Criterion", sev.criterion);
+    html += fact("SEV expiry", sev.expiry_text || sev.expiry);
+    html += "</dl>";
+
+    if (sev.variant_details) {
+      html += '<div class="note"><p class="note-label">' +
+        (sev.has_restriction_note
+          ? "Variant details — restriction, read in full"
+          : "Variant details") +
+        '</p><p>' + esc(sev.variant_details) + "</p>";
+      if (sev.restriction_dates_in_text) {
+        html += '<p class="parsed">Dates named in this text: ' +
+          esc(sev.restriction_dates_in_text.filter(Boolean).join(" – ")) +
+          ". Shown as published — compare it against the ranges above yourself.</p>";
+      }
+      html += "</div>";
+    }
+
+    if (sev.url) {
+      html += '<p class="sources" style="padding:0 1rem 0.875rem;margin:0">' +
+        '<a href="' + esc(sev.url) + '" target="_blank" rel="noopener">' +
+        "SEV entry on ROVER ↗</a></p>";
+    }
+
+    var reports = entry.reports || [];
+    if (reports.length) {
+      html += '<div class="reports"><p class="reports-head">Model reports (' +
+        reports.length + ")</p>" + reports.map(renderReport).join("") + "</div>";
+    } else {
+      html += '<p class="none">No Model Report in the published register cites this ' +
+        "SEV entry, so there is no registered workshop route to show here. Check " +
+        "ROVER directly before concluding anything.</p>";
+    }
+    return html + "</article>";
+  }
+
+  function render() {
+    var query = qEl.value.trim();
+    var want = wantedRange();
+    var matches = filter(query, want);
+    var shown = matches.slice(0, LIMIT);
+
+    resultsEl.innerHTML = shown.map(renderEntry).join("");
+    var total = ENTRIES.length;
+    if (!matches.length) {
+      emptyEl.hidden = false;
+      emptyEl.innerHTML = "Nothing in the paired registers matches " +
+        (query ? "<code>" + esc(query) + "</code>" : "that filter") +
+        ". A vehicle can be absent because it is on neither register, because the " +
+        "chassis code is written differently there, or because the import route is " +
+        "not the SEV + model report one. Check ROVER directly.";
+    } else {
+      emptyEl.hidden = true;
+    }
+    var bits = ["<strong>" + matches.length + "</strong> of " + total +
+      " records (SEV approvals and model reports)"];
+    if (matches.length > shown.length) {
+      bits.push("showing the first <strong>" + shown.length + "</strong> — narrow the search to see more");
+    }
+    if (want) {
+      bits.push("build dates " + describeRange(want) +
+        " · keeps entries whose published range overlaps it, plus any with no " +
+        "published range");
+    }
+    statusEl.innerHTML = bits.join(" · ");
+  }
+
+  function monthFromInput(value) {
+    var hit = /^(\d{4})-(\d{2})$/.exec(String(value || "").trim());
+    return hit ? Number(hit[1]) * 100 + Number(hit[2]) : null;
+  }
+
+  // null when neither bound is set; an open bound stays null inside the range
+  function wantedRange() {
+    var from = monthFromInput(fromEl.value);
+    var to = monthFromInput(toEl.value);
+    if (from === null && to === null) return null;
+    if (from !== null && to !== null && from > to) return { from: to, to: from };
+    return { from: from, to: to };
+  }
+
+  function showMonth(key) {
+    return key === null ? null
+      : String(key % 100).padStart(2, "0") + "/" + Math.floor(key / 100);
+  }
+  function describeRange(want) {
+    if (want.from !== null && want.to !== null) {
+      return showMonth(want.from) + " – " + showMonth(want.to);
+    }
+    if (want.from !== null) return "from " + showMonth(want.from);
+    return "up to " + showMonth(want.to);
+  }
+
+  var timer = null;
+  function schedule() {
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(render, 120);
+  }
+  qEl.addEventListener("input", schedule);
+  fromEl.addEventListener("input", render);
+  toEl.addEventListener("input", render);
+  clearEl.addEventListener("click", function () {
+    qEl.value = "";
+    fromEl.value = "";
+    toEl.value = "";
+    render();
+    qEl.focus();
+  });
+
+  var summary = META.summary || {};
+  var counts = META.counts || {};
+  document.getElementById("caveat").textContent = META.caveat || "";
+  document.getElementById("provenance").innerHTML =
+    "Paired from " +
+    '<a href="' + esc((META.sources || {}).sev || "#") + '" target="_blank" rel="noopener">the SEVs Register</a>' +
+    " and " +
+    '<a href="' + esc((META.sources || {}).mre || "#") + '" target="_blank" rel="noopener">approved Model Reports</a>' +
+    " · " + esc(counts.sev_list || 0) + " SEV entries, " +
+    esc(counts.mre_list || 0) + " model reports, " +
+    esc(summary.pairs || 0) + " pairs, " +
+    esc(summary.sev_unpaired || 0) + " SEV entries with no model report, " +
+    esc(summary.pairs_with_restriction_note || 0) + " pairs carrying a variant restriction" +
+    " · crawled " + esc((META.generated_at || "").slice(0, 16).replace("T", " ")) + " UTC";
+
+  render();
+}());
+</script>
