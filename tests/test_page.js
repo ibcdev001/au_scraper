@@ -42,9 +42,14 @@ function check(name, cond, extra) {
 
 // a SEV with a closed published range, to aim the filter at
 const closed = entries.find(e => e.sev && e.sev.build_from && e.sev.build_to);
+if (!closed) {
+  console.log("no SEV in this data has a closed build range; nothing to filter against");
+  process.exit(1);
+}
 const [m, y] = closed.sev.build_from.split("/").map(Number);
 const key = (yy, mm) => ({ from: yy * 100 + mm, to: yy * 100 + mm });
 const idOf = (e) => (e.sev && e.sev.approval) || (e.report && e.report.approval);
+const modelOf = (e) => (e.sev && e.sev.model) || (e.report && e.report.model) || "";
 const has = (list, ap) => list.some(e => idOf(e) === ap);
 
 console.log(`range filter against ${closed.sev.approval} ${closed.sev.build_range_text}`);
@@ -62,16 +67,44 @@ check("entries with no published range are kept",
       filter("", key(1990, 1)).every(e => true) &&
       filter("", key(1990, 1)).length > 0);
 
-// text search still works through the same function
-const chassis = filter("AHR20", null);
-check("text search narrows to the chassis code",
-      chassis.length > 0 && chassis.length < entries.length &&
-      chassis.every(e => JSON.stringify(e).indexOf("AHR20") !== -1),
-      String(chassis.length) + " records");
-check("text + range combine",
-      filter("Estima", key(y, m)).length <= filter("Estima", null).length);
-check("ranking puts the whole word first",
-      filter("LFA", null)[0].sev.model === "LFA", filter("LFA", null)[0].sev.model);
+// text search still works through the same function, on a model code the
+// current data actually carries
+const probeCode = entries.reduce((found, e) => found ||
+  (e.codes || []).find(c => /^[A-Z0-9]{4,}$/.test(c) &&
+    filter(c, null).length < entries.length), null);
+check("a model code to search for exists", !!probeCode, String(probeCode));
+if (probeCode) {
+  const chassis = filter(probeCode, null);
+  check("text search narrows to the chassis code",
+        chassis.length > 0 && chassis.length < entries.length &&
+        chassis.every(e => JSON.stringify(e).indexOf(probeCode) !== -1),
+        probeCode + ": " + chassis.length + " records");
+  check("text + range combine",
+        filter(probeCode, key(y, m)).length <= filter(probeCode, null).length);
+}
+
+// Ranking: a whole-word hit must outrank one that is only a substring.
+// The probe comes from the data, because which models are on the register
+// changes with every crawl.
+const hay = (e) => e.haystack || "";
+const wholeWord = (h, w) => new RegExp("(^| )" + w + "( |$)").test(h);
+const probe = entries.map(e => modelOf(e).toUpperCase())
+  .filter(w => /^[A-Z0-9]{3,}$/.test(w))
+  .find(w => entries.some(e => wholeWord(hay(e), w)) &&
+             entries.some(e => hay(e).indexOf(w) !== -1 && !wholeWord(hay(e), w)));
+if (!probe) {
+  console.log("  SKIP  ranking: no model is both a whole word and a substring");
+} else {
+  const ranked = filter(probe, null);
+  const firstPartial = ranked.findIndex(e => !wholeWord(hay(e), probe));
+  const lastWhole = ranked.reduce((at, e, i) => wholeWord(hay(e), probe) ? i : at, -1);
+  check("ranking puts the whole word first",
+        firstPartial === -1 || lastWhole < firstPartial,
+        probe + ": " + (firstPartial === -1 ? "no partial hits" :
+          String(firstPartial) + " whole-word hits then " +
+          (ranked.length - firstPartial) + " partial") +
+          ", top " + modelOf(ranked[0]));
+}
 
 // model reports with no SEV approval are entries in their own right
 const lone = entries.filter(e => e.kind === "report");
